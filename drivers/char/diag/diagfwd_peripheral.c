@@ -31,6 +31,9 @@
 #include "diag_mux.h"
 #include "diag_ipc_logging.h"
 #include "diagfwd_glink.h"
+#include <linux/htc_flags.h>
+
+int diag_initialized;
 
 struct data_header {
 	uint8_t control_char;
@@ -438,6 +441,9 @@ static void diagfwd_data_read_done(struct diagfwd_info *fwd_info,
 	int write_len = 0;
 	unsigned char *write_buf = NULL;
 	struct diagfwd_buf_t *temp_buf = NULL;
+#if DIAG_XPST && !defined(CONFIG_DIAGFWD_BRIDGE_CODE)
+	int ret = 0;
+#endif
 	struct diag_md_session_t *session_info = NULL;
 	uint8_t hdlc_disabled = 0;
 
@@ -525,6 +531,21 @@ static void diagfwd_data_read_done(struct diagfwd_info *fwd_info,
 			goto end;
 		}
 	}
+	if (fwd_info->peripheral == PERIPHERAL_MODEM) {
+		DIAGFWD_7K_RAWDATA(buf, "modem", DIAG_DBG_READ);
+#if DIAG_XPST && !defined(CONFIG_DIAGFWD_BRIDGE_CODE)
+		ret = checkcmd_modem_epst(buf);
+		if (ret) {
+			modem_to_userspace(buf, len, ret, 0);
+			
+			if (!(get_radio_ex2_flag() & 0x80000000))
+				goto end;
+			
+		}
+	
+	
+#endif
+	}
 
 	if (write_len > 0) {
 		err = diag_mux_write(DIAG_LOCAL_PROC, write_buf, write_len,
@@ -535,6 +556,7 @@ static void diagfwd_data_read_done(struct diagfwd_info *fwd_info,
 			goto end;
 		}
 	}
+
 	mutex_unlock(&fwd_info->data_mutex);
 	mutex_unlock(&driver->hdlc_disable_mutex);
 	diagfwd_queue_read(fwd_info);
@@ -935,7 +957,7 @@ int diagfwd_write(uint8_t peripheral, uint8_t type, void *buf, int len)
 	if (type == TYPE_CMD || type == TYPE_DCI_CMD) {
 		if (!driver->feature[peripheral].rcvd_feature_mask ||
 			!driver->feature[peripheral].sent_feature_mask) {
-			pr_debug_ratelimited("diag: In %s, feature mask for peripheral: %d not received or sent yet\n",
+			pr_debug("diag: In %s, feature mask for peripheral: %d not received or sent yet\n",
 					     __func__, peripheral);
 			return 0;
 		}
