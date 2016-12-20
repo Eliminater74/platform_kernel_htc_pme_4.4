@@ -232,8 +232,7 @@ struct input_mask {
  *
  * This ioctl may fail with ENODEV in case the file is revoked, EFAULT
  * if the receive-buffer points to invalid memory, or EINVAL if the kernel
- * does not implement the ioctl.
- */
+ * does not implement the ioctl. */
 #define EVIOCGMASK		_IOR('E', 0x92, struct input_mask)	/* Get event-masks */
 
 /**
